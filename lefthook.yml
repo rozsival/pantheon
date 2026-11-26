@@ -1,0 +1,40 @@
+commit-msg:
+  jobs:
+    - name: commitlint
+      run: pnpm commitlint --edit {1}
+
+pre-commit:
+  parallel: true
+  jobs:
+    # In order: format the shell sources, rebuild the CLI from them, then lint what was built.
+    - name: shell
+      group:
+        piped: true
+        jobs:
+          - run: pnpm prettier --write {staged_files}
+            glob:
+              - '**/*.sh'
+            stage_fixed: true
+
+          # stage_fixed would re-add only the matched sources; the rebuilt CLI is a different file.
+          - run: pnpm run build:cli && git add bin/pantheon
+            glob:
+              - 'cli/bashly.yml'
+              - 'cli/**/*.sh'
+              - 'bashly-settings.yml'
+
+          - run: pnpm run check:sh
+            glob:
+              - '**/*.sh'
+              - 'cli/bashly.yml'
+              - 'bashly-settings.yml'
+
+    - run: pnpm prettier --write {staged_files}
+      glob:
+        - '**/*.js'
+        - '**/*.json'
+        - '**/*.md'
+        - '**/*.toml'
+        - '**/*.yaml'
+        - '**/*.yml'
+      stage_fixed: true

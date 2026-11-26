@@ -1,0 +1,192 @@
+name: pantheon
+help: '🏛️ Pantheon CLI: a minimal, configurable baseline for a headless Ubuntu Server'
+version: 0.0.0
+
+commands:
+  - name: setup
+    help: Prepare and secure the server
+    commands:
+      - name: all
+        help: Run the full baseline setup (core steps, then the optional extras)
+        default: force
+        flags:
+          - long: --server-name
+            short: -n
+            arg: name
+            help: Server name for the setup summary (defaults to host name)
+          - long: --allowed-user
+            short: -u
+            arg: user
+            help: User to configure for host access and tooling (defaults to the user running sudo)
+          - long: --ssh-port
+            short: -p
+            arg: port
+            help: SSH port to configure (defaults to 2222)
+            validate: port
+          - long: --timezone
+            short: -t
+            arg: timezone
+            help: System timezone to configure (defaults to the current one)
+          - long: --lvm-device
+            short: -d
+            arg: path
+            help: Logical volume device to extend (defaults to /dev/ubuntu-vg/ubuntu-lv)
+          - long: --extras
+            short: -x
+            help: Also install the extras (Homebrew with bottom, Starship, Ghostty terminfo) without asking
+        environment_variables:
+          - name: pantheon_server_name
+            help: Default server name for setup commands
+          - name: pantheon_allowed_user
+            help: Default user for setup commands
+          - name: pantheon_ssh_port
+            help: Default SSH port for setup commands
+            validate: port
+          - name: pantheon_timezone
+            help: Default timezone for setup init
+          - name: pantheon_lvm_device
+            help: Default logical volume device for setup init
+          - name: pantheon_extras
+            help: Set to 1 to install the extras without asking
+        examples:
+          - sudo ./bin/pantheon setup
+          - sudo ./bin/pantheon setup all --ssh-port 2222 --timezone Europe/Prague --extras
+
+      - name: init
+        help: Extend the LVM root volume (when there is one) and set the timezone
+        flags:
+          - long: --timezone
+            short: -t
+            arg: timezone
+            help: System timezone to configure (defaults to the current one)
+          - long: --lvm-device
+            short: -d
+            arg: path
+            help: Logical volume device to extend (defaults to /dev/ubuntu-vg/ubuntu-lv)
+        environment_variables:
+          - name: pantheon_timezone
+            help: Default timezone for setup init
+          - name: pantheon_lvm_device
+            help: Default logical volume device for setup init
+
+      - name: packages
+        help: Upgrade the system and install essential packages and unattended upgrades
+
+      - name: docker
+        help: Install Docker Engine and Compose, and add the selected user to the docker group
+        flags:
+          - long: --allowed-user
+            short: -u
+            arg: user
+            help: User to add to the docker group
+        environment_variables:
+          - name: pantheon_allowed_user
+            help: Default user for setup commands
+
+      - name: tailscale
+        help: Install Tailscale
+
+      - name: ssh
+        help: Harden SSH configuration
+        flags:
+          - long: --allowed-user
+            short: -u
+            arg: user
+            help: User to allow in SSH
+          - long: --ssh-port
+            short: -p
+            arg: port
+            help: SSH port to configure (defaults to 2222)
+            validate: port
+        environment_variables:
+          - name: pantheon_allowed_user
+            help: Default user for setup commands
+          - name: pantheon_ssh_port
+            help: Default SSH port for setup commands
+            validate: port
+
+      - name: ufw
+        help: Configure the firewall (deny incoming, allow the SSH port)
+        flags:
+          - long: --ssh-port
+            short: -p
+            arg: port
+            help: SSH port to allow through UFW (defaults to 2222)
+            validate: port
+          - long: --reset
+            help: Reset UFW first, deleting every existing rule (including rules other services added)
+        environment_variables:
+          - name: pantheon_ssh_port
+            help: Default SSH port for setup commands
+            validate: port
+
+      - name: fail2ban
+        help: Install and configure fail2ban
+        flags:
+          - long: --ssh-port
+            short: -p
+            arg: port
+            help: SSH port to protect (defaults to 2222)
+            validate: port
+        environment_variables:
+          - name: pantheon_ssh_port
+            help: Default SSH port for setup commands
+            validate: port
+
+      - name: brew
+        help: 'Extra: install Homebrew and bottom for the selected user'
+        flags:
+          - long: --allowed-user
+            short: -u
+            arg: user
+            help: User to install Homebrew for
+        environment_variables:
+          - name: pantheon_allowed_user
+            help: Default user for setup commands
+
+      - name: shell
+        help: 'Extra: install Starship and Ghostty terminfo, and enable linger for the selected user'
+        flags:
+          - long: --allowed-user
+            short: -u
+            arg: user
+            help: User to configure the shell for
+        environment_variables:
+          - name: pantheon_allowed_user
+            help: Default user for setup commands
+
+  - name: update
+    help: |-
+      Install another Pantheon version from GitHub
+
+      Resolves the version on GitHub, asks for confirmation, then replaces the
+      installed runtime files with that version's. Nothing on the host changes:
+      re-run a setup step to apply what the new version does differently.
+      Downgrades and branches ask a second time.
+    args:
+      - name: version
+        help: Release tag (v1.2.0 or 1.2.0), branch name (unstable), or latest
+        default: latest
+    examples:
+      - pantheon update
+      - pantheon update v1.2.0
+      - pantheon update feat/my-branch
+
+  - name: install
+    help: |-
+      Put pantheon on your PATH, with bash completion
+
+      Symlinks ~/.local/bin/pantheon onto this install's bin/pantheon and writes
+      ~/.local/share/bash-completion/completions/pantheon, which bash-completion
+      lazy-loads. Idempotent; then checks that a fresh login shell finds both.
+      Run it as yourself, not with sudo; 'setup all' runs it for the allowed user.
+    examples:
+      - ./bin/pantheon install
+
+  - name: completions
+    help: Print the shell completion script for eval
+    args:
+      - name: shell
+        help: Shell to generate completions for
+        allowed: [bash, zsh]
+        default: bash

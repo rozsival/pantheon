@@ -1,0 +1,19 @@
+# IDE
+.idea
+.vscode
+
+# NPM
+node_modules
+
+# Temporary files
+*.backup
+*.bak
+*.log
+*.tmp
+log
+logs
+temp
+tmp
+
+# Agents
+.agents/plans

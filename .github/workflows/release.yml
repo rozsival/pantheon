@@ -1,0 +1,145 @@
+name: Release
+
+# A release is a `chore(release): vX.Y.Z` commit landing on main (the release skill's rebase-merged PR).
+# On that push this workflow creates the tag itself: a tag pushed with GITHUB_TOKEN would not trigger another
+# workflow. Pushing the `vX.Y.Z` tag onto the release commit by hand is the recovery path for a release that
+# was missed: GITHUB_TOKEN may not create a tag on an older commit (softprops/action-gh-release `target_commitish`).
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - 'v*.*.*'
+
+jobs:
+  detect:
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.detect.outputs.tag }}
+      sha: ${{ steps.detect.outputs.sha }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          clean: true
+          fetch-depth: 0
+          persist-credentials: false
+          ref: ${{ github.ref_type == 'branch' && github.sha || 'main' }}
+
+      - name: Find release commit
+        id: detect
+        env:
+          REF_TYPE: ${{ github.ref_type }}
+          REF_NAME: ${{ github.ref_name }}
+          BEFORE: ${{ github.event.before }}
+          AFTER: ${{ github.sha }}
+        # language=bash
+        run: |
+          # SemVer with optional channel suffix (e.g., v1.2.3 or v1.2.3-beta, v1.2.3-rc.1)
+          TAG_REGEX='^v[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9]+(\.[0-9]+)?)?$'
+          VERSION=''
+          if [[ ${REF_TYPE} == branch ]]; then
+            RANGE="${BEFORE}..${AFTER}"
+          else
+            VERSION="${REF_NAME}"
+            if [[ ! ${VERSION} =~ ${TAG_REGEX} ]]; then
+              echo "::error::Tag ${VERSION} does not match the required tag format (e.g., v1.2.3 or v1.2.3-beta, v1.2.3-rc.1)"
+              exit 1
+            fi
+            RANGE=HEAD
+          fi
+
+          FOUND=()
+          while read -r SHA SUBJECT; do
+            [[ ${SUBJECT} =~ ^chore\(release\):\ (v[^ ]+)$ ]] || continue
+            [[ -z ${VERSION} || ${BASH_REMATCH[1]} == "${VERSION}" ]] || continue
+            FOUND+=("${SHA} ${BASH_REMATCH[1]}")
+          done < <(git log --format='%H %s' "${RANGE}")
+
+          if [[ ${#FOUND[@]} -eq 0 ]]; then
+            if [[ -z ${VERSION} ]]; then
+              echo "No release commit in ${RANGE}, nothing to release."
+              exit 0
+            fi
+            echo "::error::No 'chore(release): ${VERSION}' commit on main"
+            exit 1
+          fi
+          if [[ ${#FOUND[@]} -gt 1 ]]; then
+            echo "::error::More than one release commit found: ${FOUND[*]}"
+            exit 1
+          fi
+
+          read -r SHA TAG <<<"${FOUND[0]}"
+          if [[ ! ${TAG} =~ ${TAG_REGEX} ]]; then
+            echo "::error::Release ${TAG} does not match the required tag format (e.g., v1.2.3 or v1.2.3-beta, v1.2.3-rc.1)"
+            exit 1
+          fi
+          # An existing tag on the same commit is a re-run; anywhere else it is a conflict.
+          if EXISTING=$(git rev-parse -q --verify "refs/tags/${TAG}^{commit}"); then
+            if [[ ${EXISTING} != "${SHA}" ]]; then
+              echo "::error::Tag ${TAG} already exists on ${EXISTING}, not on the release commit ${SHA}"
+              exit 1
+            fi
+          fi
+          echo "Releasing ${TAG} from ${SHA}"
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "sha=${SHA}" >> "$GITHUB_OUTPUT"
+
+  release:
+    runs-on: ubuntu-latest
+    needs: detect
+    if: needs.detect.outputs.tag != ''
+    # Per release, not per workflow: a workflow-wide group keeps one pending run and cancels it for the next
+    # push, which would drop a queued release behind an ordinary push to main.
+    concurrency:
+      group: ${{ github.workflow }}-${{ needs.detect.outputs.tag }}
+      cancel-in-progress: false
+    permissions:
+      contents: write
+    env:
+      TAG: ${{ needs.detect.outputs.tag }}
+      SHA: ${{ needs.detect.outputs.sha }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          clean: true
+          fetch-depth: 0
+          ref: ${{ needs.detect.outputs.sha }}
+
+      - name: Generate changelog
+        id: changelog
+        # language=bash
+        run: |
+          PREV_TAG=$(git describe --tags --abbrev=0 "${SHA}^" 2>/dev/null || echo "")
+          if [ -n "$PREV_TAG" ]; then
+            RANGE="${PREV_TAG}..${SHA}"
+          else
+            RANGE="${SHA}"
+          fi
+          CHANGELOG=$(git log --pretty=format:"- %s (%h)" "$RANGE")
+          echo "body<<EOF" >> "$GITHUB_OUTPUT"
+          echo "$CHANGELOG" >> "$GITHUB_OUTPUT"
+          echo "EOF" >> "$GITHUB_OUTPUT"
+
+      # The runtime-only archive hosts install and update from; install.sh is the curl entry point
+      # (releases/latest/download/install.sh). Asset names carry no version, so the latest/download URLs stay stable.
+      - name: Package runtime archive
+        # language=bash
+        run: |
+          release/package.sh . dist/pantheon release "${TAG}" "${SHA}"
+          tar -C dist -czf dist/pantheon.tar.gz pantheon
+          cp release/install.sh dist/install.sh
+
+      - name: Create release and tag
+        uses: softprops/action-gh-release@v3
+        with:
+          body: ${{ steps.changelog.outputs.body }}
+          tag_name: ${{ needs.detect.outputs.tag }}
+          target_commitish: ${{ needs.detect.outputs.sha }}
+          fail_on_unmatched_files: true
+          files: |
+            dist/pantheon.tar.gz
+            dist/install.sh
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
