@@ -153,6 +153,14 @@ every `sshd_config` setting it does not manage, but **moves the drop-ins out of 
 `50-cloud-init.conf` turns password logins back on, for example).
 `packages` upgrades the system.
 
+### A re-run of `setup ssh` moved another tool's drop-in aside. What now?
+
+Every run of `setup ssh` empties `/etc/ssh/sshd_config.d/` again, including drop-ins another tool added after the first
+run. Re-run that tool's own setup so it writes its drop-in again, rather than moving the file back by hand: for
+[Devbox](https://github.com/rozsival/devbox), whose `devbox-docker.conf` denies its `dev` account, that is
+`sudo ./bin/devbox docker setup`. Until then `AllowUsers` still admits only the allowed user, but the tool's own
+checks (`./bin/devbox doctor`) fail.
+
 ### Why does a re-run not change my timezone?
 
 The default is the zone the host already has. Pass `--timezone <zone>` (or type it at the prompt) to change it.
