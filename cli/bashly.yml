@@ -1,6 +1,6 @@
 name: pantheon
 help: '🏛️ Pantheon CLI: a minimal, configurable baseline for a headless Ubuntu Server'
-version: 0.0.0
+version: 1.0.0
 
 commands:
   - name: setup
