@@ -49,16 +49,18 @@ ssh -p 2222 <user>@<server-ip>
 > After `setup`, SSH accepts **keys only, on the port you chose**. Keep your current session open until a second one
 > connects.
 
-## 🗺️ What runs on Pantheon
+## 🧭 The stack
 
-Pantheon is also the name of the author's own home server, and this repository is its baseline. These projects run
-on top of it, and each one documents only its own part:
+Pantheon is also the name of the author's own home server, and this repository is its baseline. The projects around
+it each document only their own part:
 
-| Project                                                    | What it adds                                                                      |
-| ---------------------------------------------------------- | --------------------------------------------------------------------------------- |
-| [Panther Minor](https://github.com/rozsival/panther-minor) | The AI inference stack: AMD GPU drivers, ROCm, LLMs, image generation, monitoring |
-| [devbox](https://github.com/rozsival/devbox)               | A containerised remote development environment for coding agents                  |
-| [Janus](https://github.com/rozsival/janus)                 | Remote power control for the machine, on a Raspberry Pi                           |
+| Project                                                    | Runs on                   | Role                                                                              |
+| ---------------------------------------------------------- | ------------------------- | --------------------------------------------------------------------------------- |
+| **Pantheon**                                               | The home server           | This baseline: hardened SSH, a firewall, Docker and Tailscale                     |
+| [Panther Minor](https://github.com/rozsival/panther-minor) | Pantheon                  | The AI inference stack: AMD GPU drivers, ROCm, LLMs, image generation, monitoring |
+| [Devbox](https://github.com/rozsival/devbox)               | Pantheon                  | The containerised development environment where coding agents run                 |
+| [Dotfiles](https://github.com/rozsival/dotfiles)           | The macOS laptop          | The laptop that drives Devbox: tools, agents, keys in 1Password                   |
+| [Janus](https://github.com/rozsival/janus)                 | A Raspberry Pi next to it | Power control for Pantheon: on, off and reset from a dashboard or an API          |
 
 None of them is required: Pantheon is a general baseline, and none of them requires Pantheon either.
 
